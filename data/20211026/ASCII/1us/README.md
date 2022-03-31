@@ -1,0 +1,1 @@
+all files in this folder have a gate width of 1µs and MCP gain of 4095
