@@ -5,6 +5,7 @@ import xarray as xr
 from scipy.signal import find_peaks
 import numpy as np
 import matplotlib.pyplot as plt
+from glob import glob
 
 
 # class SifParser():
@@ -53,7 +54,11 @@ def SifParser(filename: str,
         del danorm
     return da
 
-def FindPeaks(da, numpeaks, width, time=0, plot=False):
+def FindPeaks(da:xr.DataArray,
+              numpeaks:int,
+              width:int=5, 
+              time:float=0.0, 
+              plot=False)->None:
     '''
     Peak finding algorithm based on the number of expected peaks.
     Peak pixel values are saved in da.attrs['PeakPixels']
@@ -68,7 +73,7 @@ def FindPeaks(da, numpeaks, width, time=0, plot=False):
         peaks, props = find_peaks(da.sel(Time=time).values[0], prominence=Prominence, width=width)
     da.attrs['PeakPixels'] = peaks
     da.attrs['PeakProps'] = props
-    da.attrs['PeakWavelengths'] = da.Wavelength[peaks]
+    da.attrs['PeakWavelengths'] = da.Wavelength[peaks].values
     if plot==True:
         fig = plt.figure(figsize=(10,8))
         ax = fig.add_subplot(111)
@@ -77,11 +82,14 @@ def FindPeaks(da, numpeaks, width, time=0, plot=False):
         for peak in peaks:
             ax.annotate(f'{da.Wavelength[peak].values:.2f}nm', xy=(da.Wavelength[peak],da.sel(Wavelength=da.Wavelength[peak])))
     
-    return da 
+    # return da 
 
 def DataSetGenerator(filelist: List[str], 
                     dimensions='files',
-                    normalize=False)->xr.Dataset.__getitem__:
+                    normalize=False,
+                    numpeaks:int=10,
+                    width:int=5,
+                    plot=False)->xr.Dataset.__getitem__:
     '''
     Input:      
             filelist : .sif data file as string
@@ -94,17 +102,27 @@ def DataSetGenerator(filelist: List[str],
     '''
     dataset = []
     for file in filelist:
-        da, danorm = SifParser(file)
+        if normalize==True:
+            da = SifParser(file,normalize=True)
+        else:
+            da = SifParser(file,normalize=False)
+        da = FindPeaks(da, numpeaks=numpeaks, width=width, plot=plot)
         dataset.append(da)
-    # ds = xr.concat(dataset, dim=dimension)
-    ds = xr.merge(dataset, compat='override')
-    return ds
+        # ds = xr.concat(dataset, dim=dimension)
+        ds = xr.merge(dataset, compat='override')
+        return ds
+    
+        
 
 #%%       Testbed
 
-da = SifParser('/Users/briansquires/Documents/LIBS/data/20211026/1us4095mcp1.sif')
-da = FindPeaks(da, 5, 1, plot=True)
+# da = SifParser('/Users/briansquires/Documents/LIBS/data/20211026/1us4095mcp1.sif')
+# FindPeaks(da, 6, 1, plot=True)
+filelist=glob('../data/20211026/*.sif')
+ds = DataSetGenerator(filelist, plot=True)
+
     
         
     
 # %%
+
