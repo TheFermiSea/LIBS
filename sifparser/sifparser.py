@@ -53,6 +53,32 @@ def SifParser(filename: str,
         del danorm
     return da
 
+def FindPeaks(da, numpeaks, width, time=0, plot=False):
+    '''
+    Peak finding algorithm based on the number of expected peaks.
+    Peak pixel values are saved in da.attrs['PeakPixels']
+    Peak properties are saved in da.attrs['PeakProps'] as a dictionary
+    Peak wavelength values are saved in da.attrs['PeakWavelengths']
+    if plot=True, an annotated plot is generated
+    '''
+    Prominence = 0
+    peaks, props = find_peaks(da.sel(Time=time).values[0], prominence=Prominence, width=width)
+    while len(peaks) > numpeaks:
+        Prominence += 1
+        peaks, props = find_peaks(da.sel(Time=time).values[0], prominence=Prominence, width=width)
+    da.attrs['PeakPixels'] = peaks
+    da.attrs['PeakProps'] = props
+    da.attrs['PeakWavelengths'] = da.Wavelength[peaks]
+    if plot==True:
+        fig = plt.figure(figsize=(10,8))
+        ax = fig.add_subplot(111)
+        da.plot(ax=ax)
+        da.sel(Time=time, Wavelength=da.Wavelength[peaks]).plot(marker='x', linestyle='')
+        for peak in peaks:
+            ax.annotate(f'{da.Wavelength[peak].values:.2f}nm', xy=(da.Wavelength[peak],da.sel(Wavelength=da.Wavelength[peak])))
+    
+    return da 
+
 def DataSetGenerator(filelist: List[str], 
                     dimensions='files',
                     normalize=False)->xr.Dataset.__getitem__:
@@ -74,30 +100,6 @@ def DataSetGenerator(filelist: List[str],
     ds = xr.merge(dataset, compat='override')
     return ds
 
-def FindPeaks(da, numpeaks, width, time=0, plot=False):
-    Prominence = 0
-    peaks, props = find_peaks(da.sel(Time=time).values[0], prominence=Prominence, width=width)
-    while len(peaks) > numpeaks:
-        Prominence += 1
-        peaks, props = find_peaks(da.sel(Time=time).values[0], prominence=Prominence, width=width)
-    da.attrs['PeakPixels'] = peaks
-    da.attrs['PeakProps'] = props
-    da.attrs['PeakWavelengths'] = da.Wavelength[peaks]
-    if plot==True:
-        fig = plt.figure(figsize=(10,8))
-        ax = fig.add_subplot(111)
-        da.plot(ax=ax)
-        da.sel(Time=time, Wavelength=da.Wavelength[peaks]).plot(marker='x', linestyle='')
-        for peak in peaks:
-            ax.annotate(f'{da.Wavelength[peak].values:.2f}nm', xy=(da.Wavelength[peak],da.sel(Wavelength=da.Wavelength[peak])))
-    
-    return da 
-            
-    
-    
-
-
-
 #%%       Testbed
 
 da = SifParser('/Users/briansquires/Documents/LIBS/data/20211026/1us4095mcp1.sif')
@@ -105,6 +107,4 @@ da = FindPeaks(da, 5, 1, plot=True)
     
         
     
-# da = SifParser('/Users/briansquires/Downloads/10_26_2021/1us4095mcp1.sif')
-
 # %%
