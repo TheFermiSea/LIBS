@@ -85,7 +85,7 @@ def FindPeaks(da:xr.DataArray,
     # return da 
 
 def DataSetGenerator(filelist: List[str], 
-                    dimensions='files',
+                    dimension='files',
                     normalize=False,
                     numpeaks:int=10,
                     width:int=5,
@@ -108,8 +108,8 @@ def DataSetGenerator(filelist: List[str],
             da = SifParser(file,normalize=False)
         da = FindPeaks(da, numpeaks=numpeaks, width=width, plot=plot)
         dataset.append(da)
-        # ds = xr.concat(dataset, dim=dimension)
-        ds = xr.merge(dataset, compat='override')
+        ds = xr.concat(dataset, dim='files')
+        # ds = xr.merge(dataset, compat='override')
         return ds
     
         
@@ -119,7 +119,7 @@ def DataSetGenerator(filelist: List[str],
 # da = SifParser('/Users/briansquires/Documents/LIBS/data/20211026/1us4095mcp1.sif')
 # FindPeaks(da, 6, 1, plot=True)
 filelist=glob('../data/20211026/*.sif')
-ds = DataSetGenerator(filelist, plot=True)
+ds = DataSetGenerator(filelist)
 
     
         
