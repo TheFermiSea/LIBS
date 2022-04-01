@@ -4,9 +4,16 @@ from typing import List
 import xarray as xr 
 from scipy.signal import find_peaks
 import numpy as np
+import matplotlib.pyplot as plt
+
+
+# class SifParser():
+    
+    # def __init__(self):
+    #     pass
 
 def SifParser(filename: str,
-              normalize=False) -> xr.DataArray.__getitem__:
+            normalize=False) -> xr.DataArray.__getitem__:
     '''
     **Assumes calibration of detector was already preformed and stored in firmware
     Input:      .sif data file as string
@@ -22,10 +29,6 @@ def SifParser(filename: str,
     TODO: 
         add error checking
         add code to verify dimensionality matching for concatonation
-        peak finding algo
-        add con
-        
-        
     '''
     da = sif_reader.xr_open(filename)
     da = (da
@@ -38,7 +41,7 @@ def SifParser(filename: str,
         da['Wavelength'].attrs['units'] = 'nm'
         da['Time'].attrs['units'] = 's'
         da.name = 'Intensity'
-        da.attrs['units'] = 'counts/s'
+        da.attrs['units'] = 'arb. units'
     elif normalize==True:
         da['Wavelength'].attrs['units'] = 'nm'
         da['Time'].attrs['units'] = 's'
@@ -50,10 +53,8 @@ def SifParser(filename: str,
         del danorm
     return da
 
-
-
 def DataSetGenerator(filelist: List[str], 
-                     dimensions='files',
+                    dimensions='files',
                     normalize=False)->xr.Dataset.__getitem__:
     '''
     Input:      
@@ -73,7 +74,7 @@ def DataSetGenerator(filelist: List[str],
     ds = xr.merge(dataset, compat='override')
     return ds
 
-def FindPeaks(da, numpeaks, width, time=0):
+def FindPeaks(da, numpeaks, width, time=0, plot=False):
     Prominence = 0
     peaks, props = find_peaks(da.sel(Time=time).values[0], prominence=Prominence, width=width)
     while len(peaks) > numpeaks:
@@ -82,9 +83,16 @@ def FindPeaks(da, numpeaks, width, time=0):
     da.attrs['PeakPixels'] = peaks
     da.attrs['PeakProps'] = props
     da.attrs['PeakWavelengths'] = da.Wavelength[peaks]
+    if plot==True:
+        fig = plt.figure(figsize=(10,8))
+        ax = fig.add_subplot(111)
+        da.plot(ax=ax)
+        da.sel(Time=time, Wavelength=da.Wavelength[peaks]).plot(marker='x', linestyle='')
+        for peak in peaks:
+            ax.annotate(f'{da.Wavelength[peak].values:.2f}nm', xy=(da.Wavelength[peak],da.sel(Wavelength=da.Wavelength[peak])))
     
     return da 
-        
+            
     
     
 
@@ -93,7 +101,7 @@ def FindPeaks(da, numpeaks, width, time=0):
 #%%       Testbed
 
 da = SifParser('/Users/briansquires/Documents/LIBS/data/20211026/1us4095mcp1.sif')
-da = FindPeaks(da, 2, 1)
+da = FindPeaks(da, 5, 1, plot=True)
     
         
     
