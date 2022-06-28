@@ -6,6 +6,8 @@ from scipy.signal import find_peaks
 import numpy as np
 import matplotlib.pyplot as plt
 from glob import glob
+from scipy.optimize import curve_fit
+from SimulatedLIBS import simulation
 
 
 # class SifParser():
@@ -58,7 +60,12 @@ def FindPeaks(da:xr.DataArray,
               numpeaks:int,
               width:int=5, 
               time:float=0.0, 
-              plot=False)->None:
+              plot=False,
+              title=None,
+              filename='',
+              sim=False,
+              elements=[],
+              percentages=[])->None:
     '''
     Peak finding algorithm based on the number of expected peaks.
     Peak pixel values are saved in da.attrs['PeakPixels']
@@ -67,10 +74,14 @@ def FindPeaks(da:xr.DataArray,
     if plot=True, an annotated plot is generated
     '''
     Prominence = 0
-    peaks, props = find_peaks(da.sel(Time=time).values[0], prominence=Prominence, width=width)
+    peaks, props = find_peaks(da.sel(Time=time).values[0], 
+                              prominence=Prominence, 
+                              width=width)
     while len(peaks) > numpeaks:
         Prominence += 1
-        peaks, props = find_peaks(da.sel(Time=time).values[0], prominence=Prominence, width=width)
+        peaks, props = find_peaks(da.sel(Time=time).values[0], 
+                                  prominence=Prominence, 
+                                  width=width)
     da.attrs['PeakPixels'] = peaks
     da.attrs['PeakProps'] = props
     da.attrs['PeakWavelengths'] = da.Wavelength[peaks].values
@@ -80,14 +91,21 @@ def FindPeaks(da:xr.DataArray,
         da.plot(ax=ax)
         da.sel(Time=time, Wavelength=da.Wavelength[peaks]).plot(marker='x', linestyle='')
         for peak in peaks:
-            ax.annotate(f'{da.Wavelength[peak].values:.2f}nm', xy=(da.Wavelength[peak],da.sel(Wavelength=da.Wavelength[peak])))
-    
-    # return da 
+            ax.annotate(f'{da.Wavelength[peak].values:.2f}nm', 
+                        xy=(da.Wavelength[peak],
+                            da.sel(Wavelength=da.Wavelength[peak])))
+        ax.set_title(f'{title}')
+        if sim==True:
+            ax2 = ax.twinx()
+            simda = get_sim_data(elements, percentages)
+            simda.sel(Wavelength=slice(da.Wavelength.min(),da.Wavelength.max())).plot(ax=ax2,color='red')
+        plt.savefig(f'{filename}')
+    return da 
 
 def DataSetGenerator(filelist: List[str], 
                     dimension='files',
                     normalize=False,
-                    numpeaks:int=10,
+                    numpeaks:int=1,
                     width:int=5,
                     plot=False)->xr.Dataset.__getitem__:
     '''
@@ -108,21 +126,58 @@ def DataSetGenerator(filelist: List[str],
             da = SifParser(file,normalize=False)
         da = FindPeaks(da, numpeaks=numpeaks, width=width, plot=plot)
         dataset.append(da)
-        ds = xr.concat(dataset, dim='files')
-        # ds = xr.merge(dataset, compat='override')
-        return ds
+    ds = xr.merge(dataset, compat='override')
+    return ds
     
-        
 
+def get_sim_data(elements : List,
+             percentages: List,  
+             Te=1.0, 
+             Ne=10**17):
+    libs = simulation.SimulatedLIBS(Te=Te, Ne=Ne, elements=elements,percentages=percentages,
+                                    resolution=500,low_w=200,upper_w=1000,max_ion_charge=3)
+    spectrum = libs.get_raw_spectrum()
+    spectrum = spectrum.values.T.astype(float)
+    da = xr.DataArray(spectrum[1],coords = {'Wavelength':spectrum[0]})
+    da.name = 'Intensity'
+    da.attrs['units'] = 'arb. units'
+    da.Wavelength.attrs['units'] = 'nm'
+    return da
+
+def p2nm(da, pix):
+    def line(x, m, b):
+        return m*x+b 
+    pixels = np.linspace(0, len(da.Wavelength), len(da.Wavelength))
+    fit, props = curve_fit(line, da.Wavelength,pixels)
+    return pix/fit[0]
 #%%       Testbed
+filepath = '/Users/briansquires/Documents/LIBS/data/20211026/Sputtering Targets/Al/'
+siffiles = glob(filepath+'*.sif')
+for file in siffiles:
+    da = SifParser(file)
+    name = file.split('/')[-1].split('.')[0]
+    da = FindPeaks(da, 3, 1, plot=True, title='Al', filename = name, sim=True, elements=['Al'], percentages=[100])
 
-# da = SifParser('/Users/briansquires/Documents/LIBS/data/20211026/1us4095mcp1.sif')
-# FindPeaks(da, 6, 1, plot=True)
-filelist=glob('../data/20211026/*.sif')
-ds = DataSetGenerator(filelist)
+
+# filelist=glob('/Users/briansquires/Downloads/20220615/Fe_0-2500ns/*.asc')
+# filelist.sort()
+# delay = np.linspace(0,2500,25)
+# data = np.asarray([np.loadtxt(i).T[1] for i in filelist])
+# wavelength = np.loadtxt(filelist[0]).T[0]
+# fig = plt.figure(figsize=(8,12))
+# ax = fig.add_subplot()
+# da = xr.DataArray(data, coords = {'Delay':delay, 'Wavelength':wavelength})
+# for d in da.Delay:
+#     DA = da.sel(Delay=delay)
+#     DA.plot(ax=ax)
+# %%
+da = SifParser('/Users/briansquires/Downloads/350nm_10um_2.sif')
+da = FindPeaks(da,8,plot=True, title='Hg Lamp', filename='calibrationlamp.png')
+meanwidth = da.attrs['PeakProps']['widths'].mean()
+
 
     
-        
-    
+p2nm(da, meanwidth)       
 # %%
 
+# %%
