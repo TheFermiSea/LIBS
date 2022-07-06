@@ -1,4 +1,5 @@
 #%%
+from xmlrpc.server import SimpleXMLRPCDispatcher
 import sif_reader
 from typing import List
 import xarray as xr 
@@ -102,6 +103,12 @@ def FindPeaks(da:xr.DataArray,
         plt.savefig(f'{filename}')
     return da 
 
+
+from itertools import takewhile, count
+
+list( takewhile( lambda x: x < 10, count(0) ) ) # [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ]
+
+
 def DataSetGenerator(filelist: List[str], 
                     dimension='files',
                     normalize=False,
@@ -126,7 +133,7 @@ def DataSetGenerator(filelist: List[str],
             da = SifParser(file,normalize=False)
         da = FindPeaks(da, numpeaks=numpeaks, width=width, plot=plot)
         dataset.append(da)
-    ds = xr.merge(dataset, compat='override')
+    ds = xr.concat(dataset,dim = 'Position')
     return ds
     
 
@@ -150,34 +157,91 @@ def p2nm(da, pix):
     pixels = np.linspace(0, len(da.Wavelength), len(da.Wavelength))
     fit, props = curve_fit(line, da.Wavelength,pixels)
     return pix/fit[0]
+
+def merge_spectrum(filelist, name):
+    D = []
+    for i in filelist:
+        da = SifParser(i)
+        D.append(da)
+    DA = xr.merge(D)
+    DA = DA.to_array()
+    DA['name'] = name
+    return DA
+        
+        
+#%%
+AlFiles = glob('/Users/briansquires/Documents/LIBS/data/20220705/Al/air_*.sif')
+DA = merge_spectrum(AlFiles)
+
 #%%       Testbed
-filepath = '/Users/briansquires/Documents/LIBS/data/20211026/Sputtering Targets/Al/'
-siffiles = glob(filepath+'*.sif')
-for file in siffiles:
-    da = SifParser(file)
+filepath = '/Users/briansquires/Documents/LIBS/data/20220705/'
+elementpaths = glob(filepath +'*/')
+elements = [i.split('/')[-2] for i in elementpaths]
+elements.sort()
+for element in elements:
+    fig = plt.figure(figsize=(12,8))
+    ax = fig.add_subplot()
+    airfiles = glob(filepath+f'{element}/air_*.sif')
     name = file.split('/')[-1].split('.')[0]
-    da = FindPeaks(da, 3, 1, plot=True, title='Al', filename = name, sim=True, elements=['Al'], percentages=[100])
+    da = merge_spectrum(airfiles, name)
+    plot1 = da.plot(ax=ax, label='Air')
+    argonfiles = glob(filepath+f'{element}/argon_*.sif')
+    da = merge_spectrum(argonfiles, name)
+    plot2 = da.plot(ax=ax, label='Argon')
+    ax2 = ax.twinx()
+    if element not in ['BN', 'Inconel', 'TiO2']:
+        simda = get_sim_data([element], [100])
+        plot3 = simda.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label='Simulation', color='red')
+    elif element == 'BN':
+        simdaB = get_sim_data(['B'], [100])
+        simdaN = get_sim_data(['N'], [100])
+        plot3 = simdaB.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label='Simulation B', color='red')
+        plot4 = simdaN.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label='Simulation N', color='green')
+    elif element == 'Inconel':
+        simdaNi = get_sim_data(['Ni'], [100])
+        simdaCr = get_sim_data(['Cr'], [100])
+        plot3 = simdaNi.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label='Simulation Ni', color='red')
+        plot4 = simdaCr.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label='Simulation Cr', color='green')
+    elif element == 'TiO2':
+        simdaTi = get_sim_data(['Ti'], [100])
+        simdaO = get_sim_data(['O'], [100])
+        plot3 = simdaTi.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label='Simulation Ti', color='red')
+        plot4 = simdaO.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label='Simulation O', color='green')
 
-
-# filelist=glob('/Users/briansquires/Downloads/20220615/Fe_0-2500ns/*.asc')
-# filelist.sort()
-# delay = np.linspace(0,2500,25)
-# data = np.asarray([np.loadtxt(i).T[1] for i in filelist])
-# wavelength = np.loadtxt(filelist[0]).T[0]
-# fig = plt.figure(figsize=(8,12))
-# ax = fig.add_subplot()
-# da = xr.DataArray(data, coords = {'Delay':delay, 'Wavelength':wavelength})
-# for d in da.Delay:
-#     DA = da.sel(Delay=delay)
-#     DA.plot(ax=ax)
-# %%
-da = SifParser('/Users/briansquires/Downloads/350nm_10um_2.sif')
-da = FindPeaks(da,8,plot=True, title='Hg Lamp', filename='calibrationlamp.png')
-meanwidth = da.attrs['PeakProps']['widths'].mean()
-
-
+    ax.set_title(element)
+    if 'plot4' in locals():
+        plots = plot1+plot2+plot3 + plot4
+        del plot4
+    else:
+        plots = plot1 + plot2 + plot3 
+    labs = [l.get_label() for l in plots]
+    ax2.legend(plots, labs, loc=0)
+    fig.savefig(filepath+f'{element}/{element}.png')
+   
     
-p2nm(da, meanwidth)       
-# %%
+        
+
+
+# # filelist=glob('/Users/briansquires/Downloads/20220615/Fe_0-2500ns/*.asc')
+# # filelist.sort()
+# # delay = np.linspace(0,2500,25)
+# # data = np.asarray([np.loadtxt(i).T[1] for i in filelist])
+# # wavelength = np.loadtxt(filelist[0]).T[0]
+# # fig = plt.figure(figsize=(8,12))
+# # ax = fig.add_subplot()
+# # da = xr.DataArray(data, coords = {'Delay':delay, 'Wavelength':wavelength})
+# # for d in da.Delay:
+# #     DA = da.sel(Delay=delay)
+# #     DA.plot(ax=ax)
+# # %%
+
+# filelist = glob('/Users/briansquires/Documents/LIBS/data/20220701/gradient_sample/*.sif')
+# filelist.sort()
+# pos = [float(i.split('.sif')[0].split('/')[-1]) for i in filelist]
+# DA = DataSetGenerator(filelist, dimension='Position')
+# DA = DA.assign_coords({'Position': pos})
+# DA.plot()
+
+
 
 # %%
