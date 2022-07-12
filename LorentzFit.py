@@ -51,6 +51,8 @@ T = 1/(slope*k[0])
 
 ax.annotate(f'T = {T:.2f} K', xy=(402, 1e6))
 
+fig.savefig('LorentzFit_Al.png')
+
 
 
 
