@@ -13,6 +13,8 @@ ret = spc.Initialize("")
 shm = spc.SetWavelength(0, 350)
 
 Trigger = Trigger()
+Trigger.configure()
+
 
 sdk3 = AndorSDK3()
 cam = sdk3.GetCamera(0)
@@ -39,12 +41,20 @@ cam.DDGIOCEnable = True
 cam.MCPGain = 1000
 cam.DDGOutputDelay = 1000000
 cam.DDGOutputWidth = 500000
-cam.ExternalTriggerDelay = 1000000
+cam.MetadataEnable = True
+SpuriousNoiseFilter = True
+MCPIntelligate = True
+imgsize = cam.ImageSizeBytes
+buf = np.empty((imgsize,), dtype='B')
+cam.queue(buf, imgsize)
+
 cam.AcquisitionStart()
-acq = cam.acquire()
-Trigger.configure()
 Trigger.single_task()
-Trigger.close()
+acq = cam.wait_buffer(1000)
 cam.AcquisitionStop()
 cam.flush()
+
+da = xr.DataArray(acq.image)
+da = da.sum('dim_0')
+da.plot()
 
