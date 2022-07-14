@@ -144,6 +144,16 @@ University of North Texas \\
     \includegraphics[width=\textwidth]{/Users/briansquires/Documents/LIBS/LorentzFit_Al.png}
 \end{frame}
 
+\foreach \x in {Al, Cu, Fe, Ni}{
+    \begin{frame}
+        \includegraphics[width=\textwidth]{/Users/briansquires/Documents/LIBS/data/20220713/Argon+Green_IR_test/\x/plot.png}
+    \end{frame}
+}
+
+\begin{frame}
+    \includegraphics[width=\textwidth]{/Users/briansquires/Documents/LIBS/data/20220713/gradient.png}
+\end{frame}
+
 \begin{frame}{Other}
     \begin{itemize}
         \item Optical Path Rebuild
@@ -164,7 +174,8 @@ University of North Texas \\
             \item Interfaced with spectrograph using ATSpectrograph Python library
             \item Made progress interfacing with camera with AndorSDK3 Python library
             \begin{itemize}
-                \item Unable to get a LIBS spectrum, but can get a calibration lamp signal
+                \item Able to collect signal but not the calibration on the spectrograph eeprom.
+                \item Will do external calibration soon and write code to put data in an Xarray
             \end{itemize}
         \end{itemize}
     \end{itemize}
