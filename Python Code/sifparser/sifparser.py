@@ -180,23 +180,23 @@ def merge_spectrum(filelist, name):
 #     ax.set_title(element)
 #     sim = get_sim_data([element],[100])
 #     sim.sel(Wavelength=slice(280,430)).plot(color='black', label='simulation')
-#     ax2.legend(loc='upper left')
-#     fig.savefig(path + '/' + element + '/plot.png')
-# %%
-da = SifParser('/Users/briansquires/Documents/LIBS/data/20220713/gradient1.sif')
-fig = plt.figure(figsize=(12,8))
-ax = fig.add_subplot()
-lns1 = da.plot(ax = ax, label = 'Experiment')
-simfe = get_sim_data(['Fe'],[100])
-simni = get_sim_data(['Ni'], [100])
-ax2 = ax.twinx()
-ax3 = ax.twinx()
-lns2 = simfe.sel(Wavelength=slice(278,430)).plot(color='red', ax=ax2, label='Simulation Fe')
-lns3 = simni.sel(Wavelength=slice(270,430)).plot(color='green',ax=ax3, label='Simulation Ni')
-ax.set_title('Gradient Fe/Ni Sample')
-leg = lns1 + lns2 + lns3
-labs = [l.get_label() for l in leg]
-ax.legend(leg, labs, loc=0)
-fig.savefig('/Users/briansquires/Documents/LIBS/data/20220713/gradient.png')
-# %%
-da = SifParser('/Users/briansquires/Documents/LIBS/data/20220713/calibrationlamp350.sif')
+# #     ax2.legend(loc='upper left')
+# #     fig.savefig(path + '/' + element + '/plot.png')
+# # %%
+# da = SifParser('/Users/briansquires/Documents/LIBS/data/20220713/gradient1.sif')
+# fig = plt.figure(figsize=(12,8))
+# ax = fig.add_subplot()
+# lns1 = da.plot(ax = ax, label = 'Experiment')
+# simfe = get_sim_data(['Fe'],[100])
+# simni = get_sim_data(['Ni'], [100])
+# ax2 = ax.twinx()
+# ax3 = ax.twinx()
+# lns2 = simfe.sel(Wavelength=slice(278,430)).plot(color='red', ax=ax2, label='Simulation Fe')
+# lns3 = simni.sel(Wavelength=slice(270,430)).plot(color='green',ax=ax3, label='Simulation Ni')
+# ax.set_title('Gradient Fe/Ni Sample')
+# leg = lns1 + lns2 + lns3
+# labs = [l.get_label() for l in leg]
+# ax.legend(leg, labs, loc=0)
+# fig.savefig('/Users/briansquires/Documents/LIBS/data/20220713/gradient.png')
+# # %%
+# da = SifParser('/Users/briansquires/Documents/LIBS/data/20220713/calibrationlamp350.sif')
