@@ -17,10 +17,8 @@ class LIBS:
         ret = self.spc.Initialize("")
         shm = self.spc.SetWavelength(0, 350)
         self.spc.SetSlitWidth(0,0,100)
-
         self.Trigger = Trigger()
         self.Trigger.configure()
-
         self.sdk3 = AndorSDK3()
         self.cam = self.sdk3.GetCamera(0)
         self.cam.SensorCooling = True
@@ -46,15 +44,22 @@ class LIBS:
         (ret, self.calibration) = self.spc.GetCalibration(0, self.cam.SensorWidth)
         
         self.cam_params = {
-        'TriggerMode' : 'External',
-        'GateMode' : 'DDG',
-        'DDGIOCEnable' : True,
-        'MCPGain' : 1000,
-        'DDGOutputDelay' : 1000000,
-        'DDGOutputWidth' : 500000,
-        'MetadataEnable' : True,
-        'SpuriousNoiseFilter' : True,
-        'MCPIntelligate' : True
+            'TriggerMode' : 'External',
+            'GateMode' : 'DDG',
+            'DDGIOCEnable' : True,
+            'MCPGain' : 1000,
+            'DDGOutputDelay' : 1000000,
+            'DDGOutputWidth' : 500000,
+            'MetadataEnable' : True,
+            'SpuriousNoiseFilter' : True,
+            'MCPIntelligate' : True
+        }
+        
+        self.spc_params = {
+            'Slit Width' : self.spc.GetSlitWidth(0,0),
+            'Grating Position' : self.spc.GetWavelength(0),
+            'Grove Density' : self.spc.GetGratingInfo(0)[1],
+            'Blaze Wavelength' : self.spc.GetGratingInfo(0)[2]
         }
         
         self.set_cam_params(**self.cam_params)
@@ -73,6 +78,11 @@ class LIBS:
             da.attrs[k] = acq.metadata.__dict__[k]
         for k in self.cam_params.keys():
             da.attrs[k] = self.cam_params[k]
+        for k in self.spc_params.keys():
+            da.attrs[k] = self.spc_params[k]
+        da.name = 'Intensity'
+        da.Wavelength.attrs['units'] = 'nm'
+        da.attrs['units'] = 'arb. units'
         return da
         
     def get_background(self):
@@ -111,7 +121,10 @@ class LIBS:
         else:
             print('Grating at Zero Order!')
   
-    
+    def move_grating(self, position):
+        ret = self.spc.SetWavelength(0, position)
+        (ret, self.calibration) = self.spc.GetCalibration(0, self.cam.SensorWidth)
+        
 
         
 if __name__ == '__main__':
