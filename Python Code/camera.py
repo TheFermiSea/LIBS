@@ -38,11 +38,14 @@ class LIBS:
             if self.cam.TemperatureStatus == "Fault":
                 err_str = "Camera faulted when cooling to target temperature"
                 raise RuntimeError(err_str)
-            time.sleep(5)
-            if self.cam.TemperatureStatus != "Stabilised":
+            time.sleep(1)
+            if self.cam.TemperatureStatus == "Stabilised":
                 break
             
-
+        self.spc.SetNumberPixels(0,self.cam.SensorWidth)
+        self.spc.SetPixelWidth(0,self.cam.PixelWidth)
+        (ret, self.calibration) = self.spc.GetCalibration(0, self.cam.SensorWidth)
+        
         self.set_cam_params()
         self.get_background()
         print('System Initialized')
@@ -85,16 +88,14 @@ class LIBS:
 
         da  = xr.DataArray(acq.image).sum('dim_1')
         # da = da - self.bkg
-        return da
+        return da   
+    
+    def img_to_xarray(self, img):
+        da = xr.DataArray(img).sum('dim_1')
+        da.assign_coords({'Wavelength': self.calibration}) 
         
-        
-        
-        
-        
-        
-
-
-LIBS = LIBS()
+if __name__ == '__main__':
+    LIBS = LIBS()
 
 
 
