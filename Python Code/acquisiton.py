@@ -7,7 +7,7 @@ import pint
 import time
 from trigger import Trigger
 from pyAndorSpectrograph.spectrograph import ATSpectrograph
-from sifparser.sifparser import SifParser
+from sifparser.sifparser import SifParser, merge_spectrum, get_sim_data
 from tqdm import tqdm
 
 class LIBS:
@@ -16,7 +16,7 @@ class LIBS:
         self.spc = ATSpectrograph()
         ret = self.spc.Initialize("")
         shm = self.spc.SetWavelength(0, 350)
-        self.spc.SetSlitWidth(0,0,100)
+        self.spc.SetSlitWidth(0,1,100)
         self.Trigger = Trigger()
         self.Trigger.configure()
         self.sdk3 = AndorSDK3()
@@ -47,7 +47,7 @@ class LIBS:
             'TriggerMode' : 'External',
             'GateMode' : 'DDG',
             'DDGIOCEnable' : True,
-            'MCPGain' : 1000,
+            'MCPGain' : 3600,
             'DDGOutputDelay' : 1000000,
             'DDGOutputWidth' : 500000,
             'MetadataEnable' : True,
@@ -56,10 +56,10 @@ class LIBS:
         }
         
         self.spc_params = {
-            'Slit Width' : self.spc.GetSlitWidth(0,0),
-            'Grating Position' : self.spc.GetWavelength(0),
-            'Grove Density' : self.spc.GetGratingInfo(0)[1],
-            'Blaze Wavelength' : self.spc.GetGratingInfo(0)[2]
+            'Slit Width' : self.spc.GetSlitWidth(0,1)[1],
+            'Grating Position' : self.spc.GetWavelength(0)[1],
+            'Grove Density' : self.spc.GetGratingInfo(0,self.spc.GetGrating(0)[1],10)[1],
+            'Blaze Wavelength' : self.spc.GetGratingInfo(0,self.spc.GetGrating(0)[1],10)[2]
         }
         
         self.set_cam_params(**self.cam_params)
@@ -69,8 +69,27 @@ class LIBS:
     def set_cam_params(self, **params: dict):
         for k in params.items():
             self.cam.__setattr__(k[0],k[1])
-            self.cam_params[str(k[0])] = k[1]
+            self.update_params()
             
+    def update_params(self):
+            self.cam_params = {
+                'TriggerMode' : self.cam.TriggerMode,
+                'GateMode' : self.cam.GateMode,
+                'DDGIOCEnable' : self.cam.DDGIOCEnable,
+                'MCPGain' : self.cam.MCPGain,
+                'DDGOutputDelay' : self.cam.DDGOutputDelay,
+                'DDGOutputWidth' : self.cam.DDGOutputWidth,
+                'MetadataEnable' : self.cam.MetadataEnable,
+                'SpuriousNoiseFilter' : self.cam.SpuriousNoiseFilter,
+                'MCPIntelligate' : self.cam.MCPIntelligate
+            }
+            self.spc_params = {
+                'Slit Width' : self.spc.GetSlitWidth(0,1)[1],
+                'Grating Position' : self.spc.GetWavelength(0)[1],
+                'Grove Density' : self.spc.GetGratingInfo(0,self.spc.GetGrating(0)[1],10)[1],
+                'Blaze Wavelength' : self.spc.GetGratingInfo(0,self.spc.GetGrating(0)[1],10)[2]
+            }
+        
     def img_to_xarray(self, acq):
         da = xr.DataArray(acq.image).sum('dim_0')
         da = da.assign_coords({'Wavelength': ('dim_1', self.calibration)}).set_index(dim_1='Wavelength').rename({'dim_1':'Wavelength'})
@@ -95,35 +114,71 @@ class LIBS:
         self.cam.SoftwareTrigger()
         acq = self.cam.wait_buffer(1000000)
         self.cam.AcquisitionStop()
+        self.update_params()
         self.bkg = self.img_to_xarray(acq)
         self.spc.SetShutter(0,0)
         self.cam.flush()
         self.cam.TriggerMode = 'External'
 
         
-    def get_spectrum(self):
+    def get_spectrum(self, bkgsub=True):
         if self.spc.AtZeroOrder(0)[1] == 0 :
             imgsize = self.cam.ImageSizeBytes
             buf = np.empty((imgsize,), dtype='B')
             self.cam.queue(buf, imgsize)
-            self.spc.SetShutter(0,1)
+            ret = self.spc.SetShutter(0,1)
             self.cam.AcquisitionStart()
             self.Trigger.single_task()
             acq = self.cam.wait_buffer(10000)
             self.cam.AcquisitionStop()
             self.cam.flush()
             self.spc.SetShutter(0,0)
+            self.update_params()
             _da  = self.img_to_xarray(acq)
             _attrs = _da.attrs
+            _da, self.bkg = xr.align(_da, self.bkg, join='exact')
             da = _da - self.bkg
             da.attrs = _attrs
-            return da 
+            if bkgsub == False:
+                return _da
+            elif bkgsub == True:
+                return da 
+            else:
+                raise TypeError
         else:
             print('Grating at Zero Order!')
   
     def move_grating(self, position):
         ret = self.spc.SetWavelength(0, position)
         (ret, self.calibration) = self.spc.GetCalibration(0, self.cam.SensorWidth)
+        
+    def plot_spectra(self,
+                     da : list, 
+                     elements : list[str], 
+                     percentages : list[float]) -> xr.DataArray.__getitem__:
+        if len(da) == 1:
+            fig = plt.figure(figsize=(12,8))
+            ax = fig.add_subplot()
+            da.plot(ax=ax)
+            SIMDA = []
+            for element in elements():
+                simda = get_sim_data()
+                ax2 = ax.twinx()
+                simda.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label = element)           
+           
+        if len(da) >1:
+            da = merge_spectrum(da, str(elements))
+            fig = plt.figure(figsize=(12,8))
+            ax = fig.add_subplot()
+            da.plot(ax=ax)
+            SIMDA = []
+            for element in elements():
+                simda = get_sim_data()
+                ax2 = ax.twinx()
+                simda.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label = element)           
+           
+        return da
+            
         
 
         
