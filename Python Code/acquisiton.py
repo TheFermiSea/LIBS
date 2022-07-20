@@ -1,4 +1,5 @@
 #%%
+from turtle import color
 from pyAndorSDK3 import AndorSDK3
 from pyAndorSpectrograph.spectrograph import ATSpectrograph
 import numpy as np
@@ -9,6 +10,7 @@ from trigger import Trigger
 from pyAndorSpectrograph.spectrograph import ATSpectrograph
 from sifparser.sifparser import SifParser, merge_spectrum, get_sim_data
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 class LIBS:
     def __init__(self):
@@ -16,7 +18,7 @@ class LIBS:
         self.spc = ATSpectrograph()
         ret = self.spc.Initialize("")
         shm = self.spc.SetWavelength(0, 350)
-        self.spc.SetSlitWidth(0,1,100)
+        self.spc.SetSlitWidth(0,2,100)
         self.Trigger = Trigger()
         self.Trigger.configure()
         self.sdk3 = AndorSDK3()
@@ -56,7 +58,7 @@ class LIBS:
         }
         
         self.spc_params = {
-            'Slit Width' : self.spc.GetSlitWidth(0,1)[1],
+            'Slit Width' : self.spc.GetSlitWidth(0,2)[1],
             'Grating Position' : self.spc.GetWavelength(0)[1],
             'Grove Density' : self.spc.GetGratingInfo(0,self.spc.GetGrating(0)[1],10)[1],
             'Blaze Wavelength' : self.spc.GetGratingInfo(0,self.spc.GetGrating(0)[1],10)[2]
@@ -151,39 +153,61 @@ class LIBS:
     def move_grating(self, position):
         ret = self.spc.SetWavelength(0, position)
         (ret, self.calibration) = self.spc.GetCalibration(0, self.cam.SensorWidth)
+        self.get_background()
         
     def plot_spectra(self,
                      da : list, 
                      elements : list[str], 
-                     percentages : list[float]) -> xr.DataArray.__getitem__:
-        if len(da) == 1:
+                     percentages : list[float],
+                     sim = False) -> xr.DataArray.__getitem__:
+        if type(da) is not list:
             fig = plt.figure(figsize=(12,8))
             ax = fig.add_subplot()
             da.plot(ax=ax)
             SIMDA = []
-            for element in elements():
-                simda = get_sim_data()
-                ax2 = ax.twinx()
-                simda.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label = element)           
-           
-        if len(da) >1:
-            da = merge_spectrum(da, str(elements))
+            if sim == True:
+                for element in elements:
+                    simda = get_sim_data(elements, percentages)
+                    ax2 = ax.twinx()
+                    simda.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label = element, color='red')           
+            ax.set_title(str(elements))
+            return da
+        if type(da) is list and len(da)>1:
+            DA = xr.merge(da)
+            DA = DA.to_array()
             fig = plt.figure(figsize=(12,8))
             ax = fig.add_subplot()
-            da.plot(ax=ax)
+            DA.plot(ax=ax)
             SIMDA = []
-            for element in elements():
-                simda = get_sim_data()
-                ax2 = ax.twinx()
-                simda.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label = element)           
-           
-        return da
+            if sim ==True:
+                for element in elements:
+                    simda = get_sim_data(elements, percentages)
+                    ax2 = ax.twinx()
+                    simda.sel(Wavelength = slice(DA.Wavelength.min(), DA.Wavelength.max())).plot(ax=ax2, label = element, color='red')           
+            ax.set_title(str(elements))
+            return DA
             
         
-
+#%%
         
 if __name__ == '__main__':
     LIBS = LIBS()
+#%% 
+DA = []
+LIBS.Trigger.single_task()
+for i in [300, 400, 500]:
+    LIBS.move_grating(i)
+    time.sleep(2)
+    da = LIBS.get_spectrum()
+    if da.max() < 4e9:
+        DA.append(da)
+    else:
+        while da.max()>4e9:
+            da = LIBS.get_spectrum()
+        DA.append(da)
+LIBS.move_grating(350)
+
+DA = LIBS.plot_spectra(da = DA,elements=['Cu'], percentages=[100], sim=True)
 
 
 
