@@ -1,5 +1,4 @@
 #%%
-from turtle import color
 from pyAndorSDK3 import AndorSDK3
 from pyAndorSpectrograph.spectrograph import ATSpectrograph
 import numpy as np
@@ -95,12 +94,14 @@ class LIBS:
     def img_to_xarray(self, acq):
         da = xr.DataArray(acq.image).sum('dim_0')
         da = da.assign_coords({'Wavelength': ('dim_1', self.calibration)}).set_index(dim_1='Wavelength').rename({'dim_1':'Wavelength'})
-        for k  in acq.metadata.__dict__.keys():
+        for k in acq.metadata.__dict__.keys():
             da.attrs[k] = acq.metadata.__dict__[k]
         for k in self.cam_params.keys():
             da.attrs[k] = self.cam_params[k]
         for k in self.spc_params.keys():
             da.attrs[k] = self.spc_params[k]
+        del da.attrs['_config']
+        del da.attrs['_atutil']
         da.name = 'Intensity'
         da.Wavelength.attrs['units'] = 'nm'
         da.attrs['units'] = 'arb. units'
@@ -149,6 +150,31 @@ class LIBS:
                 raise TypeError
         else:
             print('Grating at Zero Order!')
+            
+    def get_calibration_spectrum(self, bkgsub=True):
+        if self.spc.AtZeroOrder(0)[1] == 0 :
+            self.set_cam_params(**{'MCPGain':10,'TriggerMode': 'Internal', 'GateMode': 'CW On'})
+            imgsize = self.cam.ImageSizeBytes
+            buf = np.empty((imgsize,), dtype='B')
+            self.cam.queue(buf, imgsize)
+            ret = self.spc.SetShutter(0,1)
+            acq = self.cam.acquire()
+            self.cam.flush()
+            self.spc.SetShutter(0,0)
+            self.update_params()
+            _da  = self.img_to_xarray(acq)
+            _attrs = _da.attrs
+            _da, self.bkg = xr.align(_da, self.bkg, join='exact')
+            da = _da - self.bkg
+            da.attrs = _attrs
+            if bkgsub == False:
+                return _da
+            elif bkgsub == True:
+                return da 
+            else:
+                raise TypeError
+        else:
+            print('Grating at Zero Order!')
   
     def move_grating(self, position):
         ret = self.spc.SetWavelength(0, position)
@@ -177,14 +203,18 @@ class LIBS:
             DA = DA.to_array()
             fig = plt.figure(figsize=(12,8))
             ax = fig.add_subplot()
-            DA.plot(ax=ax)
+            lb1 = DA.plot(ax=ax, label='Experiment')
             SIMDA = []
             if sim ==True:
                 for element in elements:
                     simda = get_sim_data(elements, percentages)
                     ax2 = ax.twinx()
-                    simda.sel(Wavelength = slice(DA.Wavelength.min(), DA.Wavelength.max())).plot(ax=ax2, label = element, color='red')           
+                    lb2 = simda.sel(Wavelength = slice(DA.Wavelength.min(), DA.Wavelength.max())).plot(ax=ax2, label = element +' Simulation', color='red')     
+                    SIMDA.append(lb2)     
             ax.set_title(str(elements))
+            lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
+            lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
+            ax.legend(lines, labels, loc='upper right')
             return DA
             
         
@@ -193,26 +223,41 @@ class LIBS:
 if __name__ == '__main__':
     LIBS = LIBS()
 #%% 
-DA = []
-LIBS.Trigger.single_task()
-for i in [300, 400, 500]:
-    LIBS.move_grating(i)
-    time.sleep(2)
-    da = LIBS.get_spectrum()
-    if da.max() < 4e9:
-        DA.append(da)
-    else:
-        while da.max()>4e9:
-            da = LIBS.get_spectrum()
-        DA.append(da)
-LIBS.move_grating(350)
-
-DA = LIBS.plot_spectra(da = DA,elements=['Cu'], percentages=[100], sim=True)
-
-
-
-
+LIBS.move_grating(273.83)
+fig = plt.figure(figsize=(12,8))
+ax = fig.add_subplot()
+# da = LIBS.get_spectrum()
+# input('')
+cda = LIBS.get_spectrum()
+# da.plot(ax=ax, label = 'Fe')
+cda.plot(ax=ax, label = 'Fe + C')
+ax.legend()
+ax.annotate('1200 gmm grating',xy=(285,cda.max()*.9))
+ax.vlines(273.83,cda.min(),cda.max()*.75,color='red', linestyles='dashed')
+fig.savefig(r'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220721\Fe+C.png')
 
 
 
 # %%
+
+D = []
+pos = tqdm(np.arange(250,600,40), leave=False)
+for i in pos:
+    LIBS.move_grating(i)
+    time.sleep(5)
+    da = LIBS.get_spectrum()
+    if da.max() < 4e9:
+        D.append(da)
+    else:
+        while da.max()>4e9:
+            da = LIBS.get_spectrum()
+        D.append(da)
+element = 'Co'
+DA = LIBS.plot_spectra(da = D,elements=[element], percentages=[100], sim=True)
+DA.to_netcdf(fr'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220726\gen3\{element}.nc')
+plt.savefig(fr'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220726\gen3\{element}.png')
+
+
+
+# %%
+
