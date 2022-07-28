@@ -74,12 +74,12 @@ def FindPeaks(da:xr.DataArray,
     if plot=True, an annotated plot is generated
     '''
     Prominence = 0
-    peaks, props = find_peaks(da.sel(Time=time).values[0], 
+    peaks, props = find_peaks(da.values[0], 
                               prominence=Prominence, 
                               width=width)
     while len(peaks) > numpeaks:
         Prominence += 1
-        peaks, props = find_peaks(da.sel(Time=time).values[0], 
+        peaks, props = find_peaks(da.values[0], 
                                   prominence=Prominence, 
                                   width=width)
     da.attrs['PeakPixels'] = peaks
@@ -89,7 +89,7 @@ def FindPeaks(da:xr.DataArray,
         fig = plt.figure(figsize=(10,8))
         ax = fig.add_subplot(111)
         da.plot(ax=ax)
-        da.sel(Time=time, Wavelength=da.Wavelength[peaks]).plot(marker='x', linestyle='')
+        da.sel(Wavelength=da.Wavelength[peaks]).plot(marker='x', linestyle='')
         for peak in peaks:
             ax.annotate(f'{da.Wavelength[peak].values:.2f}nm', 
                         xy=(da.Wavelength[peak],
