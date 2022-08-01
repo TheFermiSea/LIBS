@@ -60,12 +60,17 @@ class LIBS:
             'Slit Width' : self.spc.GetSlitWidth(0,2)[1],
             'Grating Position' : self.spc.GetWavelength(0)[1],
             'Grove Density' : self.spc.GetGratingInfo(0,self.spc.GetGrating(0)[1],10)[1],
-            'Blaze Wavelength' : self.spc.GetGratingInfo(0,self.spc.GetGrating(0)[1],10)[2]
+            'Blaze Wavelength' : self.spc.GetGratingInfo(0,self.spc.GetGrating(0)[1],10)[2],
+            'Output Flipper Mirror' : self.spc.GetFlipperMirror(0,2)[1]
         }
         
         self.set_cam_params(**self.cam_params)
         self.get_background()
         print('System Initialized')
+        for k, v in self.cam_params.items():
+            print(k, v)
+        for k, v in self.spc_params.items():
+            print(k,v)
             
     def set_cam_params(self, **params: dict):
         for k in params.items():
@@ -88,12 +93,16 @@ class LIBS:
                 'Slit Width' : self.spc.GetSlitWidth(0,1)[1],
                 'Grating Position' : self.spc.GetWavelength(0)[1],
                 'Grove Density' : self.spc.GetGratingInfo(0,self.spc.GetGrating(0)[1],10)[1],
-                'Blaze Wavelength' : self.spc.GetGratingInfo(0,self.spc.GetGrating(0)[1],10)[2]
+                'Blaze Wavelength' : self.spc.GetGratingInfo(0,self.spc.GetGrating(0)[1],10)[2],
+                'Output Flipper Mirror' : self.spc.GetFlipperMirror(0,2)[1]
             }
         
     def img_to_xarray(self, acq):
         da = xr.DataArray(acq.image).sum('dim_0')
-        da = da.assign_coords({'Wavelength': ('dim_1', self.calibration)}).set_index(dim_1='Wavelength').rename({'dim_1':'Wavelength'})
+        if self.spc_params['Output Flipper Mirror'] == 0:
+            da = da.assign_coords({'Wavelength': ('dim_1', self.calibration)}).set_index(dim_1='Wavelength').rename({'dim_1':'Wavelength'})
+        elif self.spc_params['Output Flipper Mirror'] == 1:
+            da = da.assign_coords({'Wavelength': ('dim_1', np.flip(self.calibration))}).set_index(dim_1='Wavelength').rename({'dim_1':'Wavelength'})
         for k in acq.metadata.__dict__.keys():
             da.attrs[k] = acq.metadata.__dict__[k]
         for k in self.cam_params.keys():
@@ -186,6 +195,7 @@ class LIBS:
                      elements : list[str], 
                      percentages : list[float],
                      sim = False) -> xr.DataArray.__getitem__:
+        from cycler import cycler
         if type(da) is not list:
             fig = plt.figure(figsize=(12,8))
             ax = fig.add_subplot()
@@ -195,7 +205,9 @@ class LIBS:
                 for element in elements:
                     simda = get_sim_data(elements, percentages)
                     ax2 = ax.twinx()
-                    simda.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label = element, color='red')           
+                    color = iter(plt.cm.rainbow(np.linspace(0, 1, 4)))
+                    c = next(color)
+                    simda.sel(Wavelength = slice(da.Wavelength.min(), da.Wavelength.max())).plot(ax=ax2, label = element, color=c)           
             ax.set_title(str(elements))
             return da
         if type(da) is list and len(da)>1:
@@ -207,9 +219,11 @@ class LIBS:
             SIMDA = []
             if sim ==True:
                 for element in elements:
-                    simda = get_sim_data(elements, percentages)
+                    simda = get_sim_data(element, percentages)
                     ax2 = ax.twinx()
-                    lb2 = simda.sel(Wavelength = slice(DA.Wavelength.min(), DA.Wavelength.max())).plot(ax=ax2, label = element +' Simulation', color='red')     
+                    color = iter(plt.cm.rainbow(np.linspace(0, 1, 4)))
+                    c = next(color)
+                    lb2 = simda.sel(Wavelength = slice(DA.Wavelength.min(), DA.Wavelength.max())).plot(ax=ax2, label = element +' Simulation', color=c)     
                     SIMDA.append(lb2)     
             ax.set_title(str(elements))
             lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
@@ -222,29 +236,13 @@ class LIBS:
         
 if __name__ == '__main__':
     LIBS = LIBS()
-#%% 
-LIBS.move_grating(273.83)
-fig = plt.figure(figsize=(12,8))
-ax = fig.add_subplot()
-# da = LIBS.get_spectrum()
-# input('')
-cda = LIBS.get_spectrum()
-# da.plot(ax=ax, label = 'Fe')
-cda.plot(ax=ax, label = 'Fe + C')
-ax.legend()
-ax.annotate('1200 gmm grating',xy=(285,cda.max()*.9))
-ax.vlines(273.83,cda.min(),cda.max()*.75,color='red', linestyles='dashed')
-fig.savefig(r'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220721\Fe+C.png')
-
-
-
 # %%
 
 D = []
-pos = tqdm(np.arange(250,600,40), leave=False)
+pos = tqdm(np.arange(300,400,39), leave=False)
 for i in pos:
     LIBS.move_grating(i)
-    time.sleep(5)
+    time.sleep(2)
     da = LIBS.get_spectrum()
     if da.max() < 4e9:
         D.append(da)
@@ -252,12 +250,51 @@ for i in pos:
         while da.max()>4e9:
             da = LIBS.get_spectrum()
         D.append(da)
-element = 'Co'
-DA = LIBS.plot_spectra(da = D,elements=[element], percentages=[100], sim=True)
-DA.to_netcdf(fr'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220726\gen3\{element}.nc')
-plt.savefig(fr'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220726\gen3\{element}.png')
+        
+#%%
+DA = LIBS.plot_spectra(da=D,elements=[], percentages=[], sim=False)
+        
+fig = plt.figure(figsize=(12,8))
+ax = fig.add_subplot()
+l1 = DA.plot(ax=ax, label = 'Experiment')
+ax2 = ax.twinx()
+# ax3 = ax.twinx()
+Alsim = get_sim_data(['Al'],[100])
+Znsim = get_sim_data(['Zr'],[100])
+l2 = Alsim.sel(Wavelength=slice(DA.Wavelength.min(),DA.Wavelength.max())).plot(ax=ax2, color='red', label='Al simulation')
+l3 = Znsim.sel(Wavelength=slice(DA.Wavelength.min(),DA.Wavelength.max())).plot(ax=ax2, color='green', label = 'Zn simulation')
+lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
+lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
+ax.legend(lines, labels, loc='upper right')
+ax.set_title(r'$Al_2O_3$(2%) @ ZnO(98%)')
+#%%
+fig.savefig(r'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220728\Al2O3@ZnO.png')
+        
+#%%
+elements = ['Al', 'O', 'Zn']
+#%%
+DA = LIBS.plot_spectra(da = D,elements=elements, percentages=[100], sim=True)
+DA.to_netcdf(fr'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220728\Al2O3_ZnO.nc')
+plt.savefig(fr'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220728\{element}.png')
+
 
 
 
 # %%
+path = r'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220726'
+elements = ['Al', 'C', 'Co', 'Cu', 'Fe', 'Ni']
+for element in elements:
+    da2 = xr.open_dataarray(path+'/gen2/' + element +'.nc')
+    da3 = xr.open_dataarray(path+'/gen3/' + element +'.nc')
+    fig = plt.figure(figsize=(12,8))
+    ax = fig.add_subplot()
+    da2.plot(ax=ax, label = 'Gen 2')
+    da3.plot(ax=ax, label = 'Gen 3')
+    ax.set_title(element)
+    ax.legend()
+    fig.savefig(rf'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220726\combined\{element}.png')
+    
+    
 
+
+# %%
