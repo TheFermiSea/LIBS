@@ -10,8 +10,13 @@ from pyAndorSpectrograph.spectrograph import ATSpectrograph
 from sifparser.sifparser import SifParser, merge_spectrum, get_sim_data
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
+
 
 class LIBS:
+    
+
+
     def __init__(self):
         
         self.spc = ATSpectrograph()
@@ -49,8 +54,8 @@ class LIBS:
             'GateMode' : 'DDG',
             'DDGIOCEnable' : True,
             'MCPGain' : 3600,
-            'DDGOutputDelay' : 1000000,
-            'DDGOutputWidth' : 500000,
+            'DDGOutputDelay' : 1350000,
+            'DDGOutputWidth' : 10000,
             'MetadataEnable' : True,
             'SpuriousNoiseFilter' : True,
             'MCPIntelligate' : True
@@ -133,23 +138,25 @@ class LIBS:
         self.cam.TriggerMode = 'External'
 
         
-    def get_spectrum(self, bkgsub=True):
+    def get_spectrum(self, bkgsub=True, shutter=True):
         if self.spc.AtZeroOrder(0)[1] == 0 :
             imgsize = self.cam.ImageSizeBytes
             buf = np.empty((imgsize,), dtype='B')
             self.cam.queue(buf, imgsize)
-            ret = self.spc.SetShutter(0,1)
+            if shutter==True:
+                ret = self.spc.SetShutter(0,1)
             self.cam.AcquisitionStart()
             self.Trigger.single_task()
             acq = self.cam.wait_buffer(10000)
             self.cam.AcquisitionStop()
             self.cam.flush()
-            self.spc.SetShutter(0,0)
+            if shutter==True:
+                self.spc.SetShutter(0,0)
             self.update_params()
             _da  = self.img_to_xarray(acq)
             _attrs = _da.attrs
             _da, self.bkg = xr.align(_da, self.bkg, join='exact')
-            da = _da - self.bkg
+            da = _da.astype('float64') - self.bkg.astype('float64')
             da.attrs = _attrs
             if bkgsub == False:
                 return _da
@@ -174,7 +181,7 @@ class LIBS:
             _da  = self.img_to_xarray(acq)
             _attrs = _da.attrs
             _da, self.bkg = xr.align(_da, self.bkg, join='exact')
-            da = _da - self.bkg
+            da = _da.astype('float64') - self.bkg.astype('float64')
             da.attrs = _attrs
             if bkgsub == False:
                 return _da
@@ -237,64 +244,58 @@ class LIBS:
 if __name__ == '__main__':
     LIBS = LIBS()
 # %%
+DA = []
+R = np.arange(1250,1500,2)
+for i in tqdm(R, leave=False):
+    LIBS.set_cam_params(**{'DDGOutputDelay': i*1000})
+    DA.append(LIBS.get_spectrum())
 
-D = []
-pos = tqdm(np.arange(300,400,39), leave=False)
-for i in pos:
-    LIBS.move_grating(i)
-    time.sleep(2)
-    da = LIBS.get_spectrum()
-    if da.max() < 4e9:
-        D.append(da)
+D = xr.concat(DA, dim='Delay')
+D = D.assign_coords({'Delay': R})
+#%%
+from NIST_Database_webscraping.NIST_Lines import Lines_LIBS
+
+lineNi = Lines_LIBS('Ni', D.Wavelength.min().values,D.Wavelength.max().values, strongLines=True)
+
+prominence = 100
+peaks, props = find_peaks(D.sel(Delay=1350), prominence=prominence)
+while len(peaks)>len(lineNi.data_frame):
+    prominence +=1
+    peaks, props = find_peaks(D.sel(Delay=1350), prominence=prominence)
+#%%
+wp = [D.Wavelength[i].values for i in peaks]
+fig, ax = plt.subplots(figsize=(12,8))
+D.sel(Delay=1350).plot(ax=ax)
+
+import math
+def find_nearest(array,value):
+    idx = np.searchsorted(array, value, side="left")
+    if idx > 0 and (idx == len(array) or math.fabs(value - array[idx-1]) < math.fabs(value - array[idx])):
+        return array[idx-1]
     else:
-        while da.max()>4e9:
-            da = LIBS.get_spectrum()
-        D.append(da)
-        
-#%%
-DA = LIBS.plot_spectra(da=D,elements=[], percentages=[], sim=False)
-        
-fig = plt.figure(figsize=(12,8))
-ax = fig.add_subplot()
-l1 = DA.plot(ax=ax, label = 'Experiment')
-ax2 = ax.twinx()
-# ax3 = ax.twinx()
-Alsim = get_sim_data(['Al'],[100])
-Znsim = get_sim_data(['Zr'],[100])
-l2 = Alsim.sel(Wavelength=slice(DA.Wavelength.min(),DA.Wavelength.max())).plot(ax=ax2, color='red', label='Al simulation')
-l3 = Znsim.sel(Wavelength=slice(DA.Wavelength.min(),DA.Wavelength.max())).plot(ax=ax2, color='green', label = 'Zn simulation')
-lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
-lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
-ax.legend(lines, labels, loc='upper right')
-ax.set_title(r'$Al_2O_3$(2%) @ ZnO(98%)')
-#%%
-fig.savefig(r'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220728\Al2O3@ZnO.png')
-        
-#%%
-elements = ['Al', 'O', 'Zn']
-#%%
-DA = LIBS.plot_spectra(da = D,elements=elements, percentages=[100], sim=True)
-DA.to_netcdf(fr'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220728\Al2O3_ZnO.nc')
-plt.savefig(fr'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220728\{element}.png')
+        return array[idx]
+
+for row in lineNi.data_frame.iterrows():
+    wl = row[1]['obs_wl_air(nm)']
+    peakwl = find_nearest(wp, wl)
+    
+    intensity = D.sel(Wavelength = peakwl, Delay=1350, method='nearest')
+    ax.annotate('Ni '+ str(row[1]['sp_num']) , xy = (wl , intensity),
+            xytext=(wl , intensity),
+            arrowprops=dict(arrowstyle = '-', connectionstyle = 'arc3',facecolor='red'))
+       
+    
+
+plt.scatter(wp, [D.sel(Delay=1350, Wavelength=i) for i in wp], marker='x', color='g')
+
+# plt.scatter(lineNi.data_frame['obs_wl_air(nm)'], [D.sel(Delay=1350, Wavelength=i, method='nearest') for i in lineNi.data_frame['obs_wl_air(nm)']], marker='o', color='r')
+
+
 
 
 
 
 # %%
-path = r'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220726'
-elements = ['Al', 'C', 'Co', 'Cu', 'Fe', 'Ni']
-for element in elements:
-    da2 = xr.open_dataarray(path+'/gen2/' + element +'.nc')
-    da3 = xr.open_dataarray(path+'/gen3/' + element +'.nc')
-    fig = plt.figure(figsize=(12,8))
-    ax = fig.add_subplot()
-    da2.plot(ax=ax, label = 'Gen 2')
-    da3.plot(ax=ax, label = 'Gen 3')
-    ax.set_title(element)
-    ax.legend()
-    fig.savefig(rf'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220726\combined\{element}.png')
-    
-    
-
-
+LIBS.set_cam_params(**{'DDGOutputDelay':1300000})
+LIBS.move_grating(220)
 # %%
