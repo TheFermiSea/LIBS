@@ -121,11 +121,14 @@ class LIBS:
         da.attrs['units'] = 'arb. units'
         return da
         
-    def get_background(self):
+    def get_background(self, shutter=True):
         imgsize = self.cam.ImageSizeBytes
         buf = np.empty((imgsize,), dtype='B')
         self.cam.queue(buf, imgsize)
-        self.spc.SetShutter(0,1)
+        if shutter:
+            self.spc.SetShutter(0,1)
+        else:
+            pass
         self.cam.TriggerMode = 'Software'
         self.cam.AcquisitionStart()
         self.cam.SoftwareTrigger()
@@ -192,10 +195,13 @@ class LIBS:
         else:
             print('Grating at Zero Order!')
   
-    def move_grating(self, position):
+    def move_grating(self, position, calibration_collection = False):
         ret = self.spc.SetWavelength(0, position)
         (ret, self.calibration) = self.spc.GetCalibration(0, self.cam.SensorWidth)
-        self.get_background()
+        if calibration_collection:
+            self.get_background(shutter=False)
+        else:
+            self.get_background(shutter=True)
         
     def plot_spectra(self,
                      da : list, 
@@ -252,14 +258,15 @@ for i in tqdm(R, leave=False):
 
 D = xr.concat(DA, dim='Delay')
 D = D.assign_coords({'Delay': R})
+D.name = 'Inconel'
 #%%
 from NIST_Database_webscraping.NIST_Lines import Lines_LIBS
 
-lineNi = Lines_LIBS('Ni', D.Wavelength.min().values,D.Wavelength.max().values, strongLines=True)
+lines = Lines_LIBS('Fe', D.Wavelength.min().values,D.Wavelength.max().values, strongLines=True)
 
 prominence = 100
 peaks, props = find_peaks(D.sel(Delay=1350), prominence=prominence)
-while len(peaks)>len(lineNi.data_frame):
+while len(peaks)>len(lines.data_frame):
     prominence +=1
     peaks, props = find_peaks(D.sel(Delay=1350), prominence=prominence)
 #%%
@@ -275,7 +282,7 @@ def find_nearest(array,value):
     else:
         return array[idx]
 
-for row in lineNi.data_frame.iterrows():
+for row in lines.data_frame.iterrows():
     wl = row[1]['obs_wl_air(nm)']
     peakwl = find_nearest(wp, wl)
     
