@@ -177,10 +177,12 @@ def DataSetGenerator(filelist: List[str],
 def get_sim_data(elements : List,
              percentages: List,  
              Te=1.0, 
-             Ne=10**17):
+             Ne=10**17,
+             resolution=500):
     libs = simulation.SimulatedLIBS(Te=Te, Ne=Ne, elements=elements,percentages=percentages,
-                                    resolution=500,low_w=200,upper_w=1000,max_ion_charge=3)
-    spectrum = libs.get_raw_spectrum()
+                                    resolution=resolution,low_w=200,upper_w=1000,max_ion_charge=3, webscraping='dynamic')
+    libs.interpolate()
+    spectrum = libs.get_interpolated_spectrum()
     spectrum = spectrum.values.T.astype(float)
     da = xr.DataArray(spectrum[1],coords = {'Wavelength':spectrum[0]})
     da.name = 'Intensity'
@@ -205,3 +207,5 @@ def merge_spectrum(filelist, name):
     DA['name'] = name
     return DA
         
+
+# %%
