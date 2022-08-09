@@ -55,7 +55,7 @@ class LIBS:
             'DDGIOCEnable' : True,
             'MCPGain' : 3600,
             'DDGOutputDelay' : 1350000,
-            'DDGOutputWidth' : 10000,
+            'DDGOutputWidth' : 1000000,
             'MetadataEnable' : True,
             'SpuriousNoiseFilter' : True,
             'MCPIntelligate' : True
@@ -251,20 +251,22 @@ if __name__ == '__main__':
     LIBS = LIBS()
 # %%
 DA = []
-R = np.arange(1250,1500,2)
+R = np.arange(0,10,.25)
 for i in tqdm(R, leave=False):
-    LIBS.set_cam_params(**{'DDGOutputDelay': i*1000})
+    # LIBS.set_cam_params(**{'DDGOutputDelay': i*1000})
+    input('')
     DA.append(LIBS.get_spectrum())
 
-D = xr.concat(DA, dim='Delay')
-D = D.assign_coords({'Delay': R})
-D.name = 'Inconel'
+D = xr.concat(DA, dim='Position')
+D = D.assign_coords({'Position': R})
+D.name = 'Fe_Ni_Gradient'
+
 #%%
 from NIST_Database_webscraping.NIST_Lines import Lines_LIBS
 
-lines = Lines_LIBS('Fe', D.Wavelength.min().values,D.Wavelength.max().values, strongLines=True)
+lines = Lines_LIBS('Cu', D.Wavelength.min().values,D.Wavelength.max().values, strongLines=True)
 
-prominence = 100
+prominence = 10
 peaks, props = find_peaks(D.sel(Delay=1350), prominence=prominence)
 while len(peaks)>len(lines.data_frame):
     prominence +=1
@@ -287,7 +289,7 @@ for row in lines.data_frame.iterrows():
     peakwl = find_nearest(wp, wl)
     
     intensity = D.sel(Wavelength = peakwl, Delay=1350, method='nearest')
-    ax.annotate('Ni '+ str(row[1]['sp_num']) , xy = (wl , intensity),
+    ax.annotate('Cu '+ str(row[1]['sp_num']) , xy = (wl , intensity),
             xytext=(wl , intensity),
             arrowprops=dict(arrowstyle = '-', connectionstyle = 'arc3',facecolor='red'))
        
@@ -306,3 +308,5 @@ plt.scatter(wp, [D.sel(Delay=1350, Wavelength=i) for i in wp], marker='x', color
 LIBS.set_cam_params(**{'DDGOutputDelay':1300000})
 LIBS.move_grating(220)
 # %%
+
+
