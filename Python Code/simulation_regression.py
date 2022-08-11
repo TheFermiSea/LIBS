@@ -53,8 +53,8 @@ def get_simulated_data_array_mp(da, elements,percentages, Nes, Tes):
 elements = ['Fe']
 percentages=[100.0]
 Nes = 10*np.logspace(10.0, 18.0, 9, dtype=np.float64)
-Tes = np.arange(.3,1,.1)
-Res = [5000]
+Tes = np.arange(.3,1,.05)
+Res = [2000]
 
 testda = get_sim_data(elements,percentages,Te=Tes[0], Ne=Nes[0], resolution=Res[0])
 wavelengths = testda.Wavelength
@@ -68,7 +68,7 @@ get_simulated_data_array(simda, elements, percentages,Nes,Tes, Res)
 def mean_square_error(simda, expda, ne, te):
     sim = simda.sel(Ne=ne, Te=te)
     if np.sum(sim) != 0:
-        mse = np.sum(np.square((expda/expda.max()) - (sim/sim.max())))
+        mse = np.sum(np.square((expda/expda.max() - sim/sim.max())))
     else:
         mse=np.nan
     RMSE = np.sqrt(mse)
@@ -92,7 +92,8 @@ mseda.attrs['best'] = best
 
 wmin = expda.Wavelength.min()
 wmax = expda.Wavelength.max()
-#%%
+
+
 fig, ax = plt.subplots()
 simda.sel(Ne=Nebest, Te=Tebest, method='nearest').sel(Wavelength=slice(wmin,wmax)).plot(ax=ax,color='red')
 ax2=ax.twinx()
