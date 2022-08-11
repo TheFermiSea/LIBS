@@ -24,7 +24,7 @@ class LIBS:
         shm = self.spc.SetWavelength(0, 350)
         self.spc.SetSlitWidth(0,2,100)
         self.Trigger = Trigger()
-        self.Trigger.configure()
+        self.Trigger.configure(1,1,1)
         self.sdk3 = AndorSDK3()
         self.cam = self.sdk3.GetCamera(0)
         self.cam.SensorCooling = True
@@ -51,6 +51,7 @@ class LIBS:
         
         self.cam_params = {
             'TriggerMode' : 'External',
+            'ExposureTime' : .1,
             'GateMode' : 'DDG',
             'DDGIOCEnable' : True,
             'MCPGain' : 3600,
@@ -85,6 +86,7 @@ class LIBS:
     def update_params(self):
             self.cam_params = {
                 'TriggerMode' : self.cam.TriggerMode,
+                'ExposureTime' : self.cam.ExposureTime,
                 'GateMode' : self.cam.GateMode,
                 'DDGIOCEnable' : self.cam.DDGIOCEnable,
                 'MCPGain' : self.cam.MCPGain,
@@ -260,6 +262,8 @@ for i in tqdm(R, leave=False):
 D = xr.concat(DA, dim='Position')
 D = D.assign_coords({'Position': R})
 D.name = 'Fe_Ni_Gradient'
+
+
 
 #%%
 from NIST_Database_webscraping.NIST_Lines import Lines_LIBS
