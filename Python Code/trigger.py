@@ -19,7 +19,7 @@ class Trigger(object):
         self.task.co_channels.add_co_pulse_chan_time("Dev1/ctr0", high_time=high_time, low_time=low_time)
         self.task.timing.cfg_implicit_timing(
             sample_mode = AcquisitionType.FINITE,
-            samps_per_chan = 1)
+            samps_per_chan = samps_per_chan)
         
     def single_task(self):
         self.task.start()
