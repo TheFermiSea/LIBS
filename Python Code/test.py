@@ -17,7 +17,7 @@ c = constant.speed_of_light
 
 
 
-D = xr.open_dataarray('/Users/briansquires/Documents/LIBS/data/20220802/.nc')
+D = xr.open_dataarray('/Users/briansquires/Documents/LIBS/data/20220802/Cu.nc')
 title = 'Cu'
 # linesAr = Lines_LIBS('Ar', 200, 600, strongLines=True)
 wmin = D.Wavelength.min().item()
