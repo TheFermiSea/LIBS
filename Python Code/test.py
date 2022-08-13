@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import scipy.constants as constant
 from scipy.constants import lambda2nu
 import pandas as pd
-from adjustText import adjust_text
 from matplotlib.text import Annotation
 
 
@@ -17,17 +16,20 @@ c = constant.speed_of_light
 
 
 
-D = xr.open_dataarray('/Users/briansquires/Documents/LIBS/data/20220802/Cu.nc')
-title = 'Cu'
+D = xr.open_dataarray(r'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220809\graidient4_pos=4.nc')
+title = 'Ni/Fe'
 # linesAr = Lines_LIBS('Ar', 200, 600, strongLines=True)
 wmin = D.Wavelength.min().item()
 wmax = D.Wavelength.max().item()
 
-lines = Lines_LIBS('Cu' ,wmin, wmax, strongLines=True)
+linesFe = Lines_LIBS('Fe' ,wmin, wmax, strongLines=True)
+linesNi = Lines_LIBS('Ni', wmin, wmax, strongLines=True)
 # lines = pd.concat([linesHg.data_frame, linesAr.data_frame])
-lines = lines.data_frame
+lines = pd.concat([linesFe.data_frame, linesNi.data_frame])
+lines = lines[lines['gA(s^-1)']>10**8]
+lines = lines.sort_values('gA(s^-1)')
 
-D = D.sel(Delay=1350)
+
 
 prominence = 100
 peaks, props = find_peaks(D.values.squeeze(), prominence=prominence, width=5)
@@ -57,7 +59,7 @@ for row in lines.iterrows():
     wl = row[1]['obs_wl_air(nm)']
     peakwl = find_nearest(wp, wl)
     idx = wp.index(peakwl)
-    if props['prominences'][idx]>500:
+    if props['prominences'][idx]>5000:
         
         
         intensity = D.sel(Wavelength = peakwl, method='nearest').item()
@@ -77,7 +79,7 @@ for row in lines.iterrows():
             offset = D.max()*.1
             if conf == True:
                 ax.annotate(f'          {element} {sp_num} \n '+ f'{conf_k}'+ r'$\rightarrow$' + f'{conf_i}' , xy = (peakwl , intensity),
-                        xytext=(wl , intensity + 500), color=color,
+                        xytext=(wl , intensity + offset), color=color,
                         arrowprops=dict(arrowstyle = '->', connectionstyle = 'arc3',facecolor='red'))
             else:
                 ax.annotate(f'{element} {sp_num}' , xy = (peakwl , intensity),
@@ -85,7 +87,7 @@ for row in lines.iterrows():
                         arrowprops=dict(arrowstyle = '->', connectionstyle = 'arc3',facecolor='red'))
             PEAKWL.append(peakwl)
     
-fig.savefig('/Users/briansquires/Documents/LIBS/data/20220808/Cu.png')
+fig.savefig(r'C:\Users\rmb0155\Desktop\Python Code\LIBS\data\20220809\gradient4_lines.png')
 
 
 # %%
