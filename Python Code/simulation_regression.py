@@ -50,10 +50,10 @@ def get_simulated_data_array_mp(da, elements,percentages, Nes, Tes):
 #%%
 
 
-elements = ['Fe']
-percentages=[100.0]
-Nes = 10*np.logspace(10.0, 18.0, 9, dtype=np.float64)
-Tes = np.arange(.3,1,.05)
+elements = ['Fe', 'Ni']
+percentages=[80,20]
+Nes = 10*np.logspace(12.0, 18.0, 9, dtype=np.float64)
+Tes = np.arange(.3,1,.1)
 Res = [2000]
 
 testda = get_sim_data(elements,percentages,Te=Tes[0], Ne=Nes[0], resolution=Res[0])
@@ -74,8 +74,7 @@ def mean_square_error(simda, expda, ne, te):
     RMSE = np.sqrt(mse)
     return np.sum(RMSE)
 
-expda = xr.open_dataarray('/Users/briansquires/Documents/LIBS/data/20220802/Fe.nc')
-expda = expda.sel(Delay=1350)
+expda = xr.open_dataarray('/Users/briansquires/Documents/LIBS/data/20220809/graidient4_pos=4.nc')
 simda = simda.dropna(dim='Ne')
 
 mseda = da = xr.DataArray(dims=['Ne','Te'],
@@ -101,7 +100,7 @@ expda.plot(ax=ax2)
 ax2.set_title('')
 plt.tight_layout()
 mseda = mseda.squeeze()
-fig.savefig('/Users/briansquires/Documents/LIBS/data/20220808/simulation_regression/Fe.png')
+fig.savefig('/Users/briansquires/Documents/LIBS/data/20220808/simulation_regression/Ni_Fe.png')
 
 fig, ax = plt.subplots()
 mseda.plot(yscale='log', ax=ax)

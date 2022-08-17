@@ -1,0 +1,101 @@
+\documentclass{beamer}
+\mode<presentation> {
+\usetheme{Boadilla}
+}
+
+%%import packages....I didnt use all of these, they're just in my template
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{standalone}
+\usepackage{tikz}
+\usepackage{textpos}
+\usepackage{modiagram}
+\usepackage{physics}
+\usepackage{amsmath}
+\usepackage[percent]{overpic}
+\usepackage{subfig}
+\usepackage{xcolor}
+\usepackage{subfiles}
+% \usepackage{hyperref}
+
+
+
+\usetikzlibrary{arrows.meta,positioning,decorations.markings,backgrounds}
+
+\tikzset{
+    every node/.style={font=\footnotesize},
+}
+
+%%citation style parameters
+
+\usepackage[backend=bibtex,%
+isbn=false,%
+url=false,%
+style=authoryear,%
+% firstinits=false,
+maxbibnames=2,%
+]{biblatex}
+\bibliography{My Collection.bib}
+
+\renewbibmacro*{cite}{%
+  \iffieldundef{shorthand}
+    {\ifthenelse{\ifnameundef{labelname}\OR\iffieldundef{labelyear}}
+       {\usebibmacro{cite:label}%
+        \setunit{\printdelim{nonameyeardelim}}}
+       {\printnames{labelname}%
+        \setunit{\printdelim{nameyeardelim}}}%
+     \usebibmacro{cite:labeldate+extradate}%
+     \setunit{\addcomma\space}%
+     \usebibmacro{journal}}
+    {\usebibmacro{cite:shorthand}}}
+
+
+
+%I dont remember why I have this in my template
+\usetikzlibrary{decorations.pathreplacing,angles,quotes}
+
+%%UNT color scheme
+\colorlet{beamer@blendedblue}{green!40!black}
+
+% Title Information
+\title[LIBS]{LIBS}
+\author{Brian Squires}
+\institute[UNT]
+{
+University of North Texas \\
+\medskip
+\textit{CAAAM}\\
+\medskip
+\textit{brian.squires@unt.edu}\\
+\medskip
+\textit{}
+}
+\date{\today}
+% \logo{\vspace{7.25cm}\includegraphics[height=1.5cm]{/Users/briansquires/github/logo1.jpg}}
+
+%Add shaded outline slide before each section
+\AtBeginSection[]
+{
+    \begin{frame}
+        \frametitle{Outline}
+        \tableofcontents[currentsection]
+    \end{frame}
+}
+
+
+\begin{document}
+\begin{frame}
+    \titlepage    
+\end{frame}
+
+\foreach \x in {heatmap, labeled_spectrum, ratio, EDX_Fe_Ni, boltzmann}{
+    \begin{frame}
+        \includegraphics[width=\textwidth]{/Users/briansquires/Documents/LIBS/data/20220815/\x.png}
+    \end{frame}
+}
+
+
+
+
+
+\end{document}
