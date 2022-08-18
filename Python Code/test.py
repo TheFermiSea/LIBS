@@ -109,31 +109,49 @@ def res_multi_lorentz( params, xData, yData ):
     diff = [ multi_lorentz( x, params ) - y for x, y in zip( xData, yData ) ]
     return diff
 
-xData = D.Wavelength.values
-yData = D.values.squeeze()
-yData = yData / max(yData)
+def multi_lorentz_fit(D, numpeaks):
+    
 
-generalWidth = 1
+    xData = D.Wavelength.values
+    yData = D.values.squeeze()
+    scaling = max(yData)
+    yData = yData / scaling
+    prom =.01
+    peaks, props = find_peaks(yData, prominence=prom)
+    while len(peaks)>numpeaks:
+        prom+=.01
+        peaks, props = find_peaks(yData, prominence=prom)
 
-yDataLoc = yData
-startValues = [ max( yData ) ]
-bounds=( [0], [max(yData)*2])
-counter = 0
+    
 
-while max( yDataLoc ) - min( yDataLoc ) > .1:
-    counter += 1
-    if counter > len(lines): ### max 20 peak...emergency break to avoid infinite loop
-        break
-    maxP = np.argmax( yDataLoc )
-    maxY = yData[ maxP ]
-    x0 = xData[ maxP ]
-    x0 = find_nearest(lines['obs_wl_air(nm)'].values, x0)
-    startValues += [ x0, maxY - min( yDataLoc ), generalWidth ]
-    [bounds[0].append(i) for i in [x0-1, (maxY - min( yDataLoc ))/2, .01]]
-    [bounds[1].append(i) for i in [x0+1, (maxY - min( yDataLoc))*2, 1]]
-    res_lsq = least_squares( res_multi_lorentz, startValues, args=( xData, yData ), bounds=bounds )
-    yDataLoc = [ y - multi_lorentz( x, res_lsq['x'] ) for x,y in zip( xData, yData ) ]
-    print(counter)
+    generalWidth = 1
+
+    yDataLoc = yData
+    startValues = [ max( yData ) ]
+    bounds=( [0], [max(yData)*2])
+    counter = 0
+
+    while max( yDataLoc ) - min( yDataLoc ) > .01:
+        counter += 1
+        if counter >numpeaks: ### max 20 peak...emergency break to avoid infinite loop
+            break
+        maxP = np.argmax( yDataLoc )
+        maxY = yData[ maxP ]
+        x0 = xData[ maxP ]
+        x0 = find_nearest(D.Wavelength[peaks], x0)
+        startValues += [ x0, maxY - min( yDataLoc ), generalWidth ]
+        [bounds[0].append(i) for i in [x0-1, (maxY - min( yDataLoc ))/2, .01]]
+        [bounds[1].append(i) for i in [x0+1, (maxY - min( yDataLoc))*2, 1]]
+        res_lsq = least_squares( res_multi_lorentz, startValues, args=( xData, yData ), bounds=bounds )
+        yDataLoc = [ y - multi_lorentz( x, res_lsq['x'] ) for x,y in zip( xData, yData ) ]
+    
+    fits = res_lsq['x']
+    offset = fits[0]
+    params = list(zip(fits[1::3], fits[2::3]*scaling, fits[3::3]))
+    params.sort(key=lambda i:i[0])
+    res_lsq_sorted = [offset, *[i for sub in params for i in sub]]
+    
+    return res_lsq_sorted
 #%%  
 fig, ax = plt.subplots()
 D.sel(Delay=1350).plot(ax=ax)
