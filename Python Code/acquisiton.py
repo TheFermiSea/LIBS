@@ -24,7 +24,7 @@ class LIBS:
         shm = self.spc.SetWavelength(0, 350)
         self.spc.SetSlitWidth(0,2,100)
         self.Trigger = Trigger()
-        self.Trigger.configure(1,1,1)
+        self.Trigger.configure(.1,.1,1)
         self.sdk3 = AndorSDK3()
         self.cam = self.sdk3.GetCamera(0)
         self.cam.SensorCooling = True
@@ -51,7 +51,7 @@ class LIBS:
         
         self.cam_params = {
             'TriggerMode' : 'External',
-            'ExposureTime' : .1,
+            'ExposureTime' : 1,
             'GateMode' : 'DDG',
             'DDGIOCEnable' : True,
             'MCPGain' : 3600,
@@ -251,9 +251,10 @@ class LIBS:
         
 if __name__ == '__main__':
     LIBS = LIBS()
+
 # %%
 DA = []
-R = np.arange(0,10,.25)
+R = np.arange(0,150,10)
 for i in tqdm(R, leave=False):
     # LIBS.set_cam_params(**{'DDGOutputDelay': i*1000})
     input('')
@@ -261,7 +262,12 @@ for i in tqdm(R, leave=False):
 
 D = xr.concat(DA, dim='Position')
 D = D.assign_coords({'Position': R})
-D.name = 'Fe_Ni_Gradient'
+D.Position.attrs['units'] = 'mm'
+D.name = 'Al_Cu_Gradient'
+
+
+
+
 
 
 
