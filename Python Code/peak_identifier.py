@@ -16,32 +16,32 @@ from scipy.optimize import curve_fit
 
 k_0 =  0.6950356 #cm^-1/K
 
-#%%
-def peak_identifier(D:xr.DataArray.__getitem__, elements, plot=False, conf=False):
-    Dnorm = D/D.max()
-    title = ' '.join([i for i in elements])
-    wmin = D.Wavelength.min().item()
-    wmax = D.Wavelength.max().item()
-
+def get_lines(elements):
     lineList = []
     for i in elements:
-        line = Lines_LIBS(i ,wmin, wmax, strongLines=True)
+        line = Lines_LIBS(i ,400, 550, strongLines=True)
         lineList.append(line.data_frame)
-    lines = pd.concat(lineList)
+    return pd.concat(lineList)
+    
+def peak_identifier(D:xr.DataArray.__getitem__, lines, plot=False, conf=False):
+    Dnorm = D/D.max()
+    wmin = D.Wavelength.min().item()
+    wmax = D.Wavelength.max().item()
+    lines = lines[(lines['obs_wl_air(nm)']>wmin) & (lines['obs_wl_air(nm)']<wmax)]
     lines = lines[lines['gA(s^-1)']>5*10**7]
     lines = lines.sort_values('gA(s^-1)')
 
-    prominence = .01
+    prominence = .001
     peaks, props = find_peaks(Dnorm.values.squeeze(), prominence=prominence, width=5)
     while len(peaks)>len(lines):
-        prominence +=.01
+        prominence +=.001
         peaks, props = find_peaks(Dnorm.values.squeeze(), prominence=prominence, width=5)
 
     wp = sorted([D.Wavelength[i].values for i in peaks])
     if plot==True:
         fig, ax = plt.subplots(figsize=(12,8))
         D.plot(ax=ax)
-        ax.set_title(f'{title}')
+        
 
     def find_nearest(array, value):
         array = np.asarray(array)
@@ -57,7 +57,7 @@ def peak_identifier(D:xr.DataArray.__getitem__, elements, plot=False, conf=False
         peakwl = find_nearest(wp, wl)
         idx = wp.index(peakwl)
         peakerr=peakwl-wl
-        if props['prominences'][idx]>.05 and np.abs(peakerr)<1:
+        if props['prominences'][idx]>.01 and np.abs(peakerr)<.2:
             if peakwl not in PEAKWL:
                 intensity = D.sel(Wavelength = peakwl, method='nearest').item()
                 l = np.log(10000000/wl*intensity/row[1]['gA(s^-1)'])
@@ -116,15 +116,25 @@ def boltzmann(da, element, plot=False):
 #%%
 
                 
-if __name__ == '__main__':
-    D = xr.open_dataarray('/Users/briansquires/Documents/LIBS/data/20220813/gradient2_clean.nc')
-    FP = []
-    for i in tqdm(D.Position):
-        FP.append(peak_identifier(D.sel(Position=i), ['Fe', 'Ni']))
-    position_da = xr.combine_nested(FP, concat_dim='Position').assign_coords({'Position': D.Position}).dropna(dim='index')
-    
 
+lines = get_lines(['Fe', 'Ni'])
+#%%
+D = xr.open_dataarray('/Users/briansquires/Documents/LIBS/data/20220817/1200gmm/1_clean.nc')
+
+FP = []
+for i in tqdm(D.Position):
+    FP.append(peak_identifier(D.sel(Position=i), lines, plot=True))
+position_da = xr.combine_nested(FP, concat_dim='Position').assign_coords({'Position': D.Position}).dropna(dim='index')
+position_da.to_netcdf('/Users/briansquires/Documents/LIBS/data/20220817/1200gmm/position_da_1.nc')
+
+def FeNiRatio(position_da):
+    Fe = position_da.where(position_da['element']=='Fe')['peakintens'].sum('index')
+    Ni = position_da.where(position_da['element']=='Ni')['peakintens'].sum('index')
+    
+    
 
 # %%
 fp = peak_identifier(D.isel(Position=0), ['Fe', 'Ni'], plot=True)
 # %%
+
+    
